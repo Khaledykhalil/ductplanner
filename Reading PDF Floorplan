@@ -1,0 +1,81 @@
+#Reading a PDF Floorplan 
+#Utilized ChatGPT with the following prompt: 
+## Write a code that will read a PDF file of any building floorplan, have it recognize lines as vectors, and then allow it to determine the number of spaces in floorplan based if the room is enclosed by 4 vectors
+## Change the code so that it asks me to upload a file at the the start of the program
+
+pip install fileupload
+
+import fitz
+import numpy as np
+import fileupload
+import io
+from IPython.display import display
+
+def get_lines_from_page(page):
+    """
+    Extracts lines from a PDF page and returns them as a list of vectors.
+    """
+    lines = []
+    for shape in page.get_drawings():
+        if shape["name"] == "line":
+            line = shape["points"]
+            lines.append(((line[0], line[1]), (line[2], line[3])))
+    return lines
+
+def is_enclosed_space(space_lines):
+    """
+    Checks if a space defined by a set of lines is enclosed by 4 vectors.
+    """
+    if len(space_lines) != 4:
+        return False
+
+    # Convert lines to numpy arrays for easier manipulation
+    space_lines = np.array(space_lines)
+
+    # Check if each line has a perpendicular line
+    for i, line in enumerate(space_lines):
+        next_line = space_lines[(i + 1) % 4]
+        vector1 = line[1] - line[0]
+        vector2 = next_line[1] - next_line[0]
+        dot_product = np.dot(vector1, vector2)
+        if abs(dot_product) > 1e-6:
+            return False
+
+    return True
+
+def count_enclosed_spaces(lines):
+    """
+    Counts the number of enclosed spaces in the floorplan.
+    """
+    enclosed_space_count = 0
+    for space_lines in lines:
+        if is_enclosed_space(space_lines):
+            enclosed_space_count += 1
+    return enclosed_space_count
+
+def main(pdf_bytes):
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    total_enclosed_spaces = 0
+    for page in doc:
+        lines = get_lines_from_page(page)
+        total_enclosed_spaces += count_enclosed_spaces(lines)
+    print("Total enclosed spaces:", total_enclosed_spaces)
+
+def on_upload_change(change):
+    """
+    Callback function to handle file upload.
+    """
+    main(change["owner"].data)
+
+def upload_file():
+    """
+    Function to upload a PDF file.
+    """
+    upload_widget = fileupload.FileUploadWidget()
+    upload_widget.observe(on_upload_change, names="data")
+    display(upload_widget)
+
+if __name__ == "__main__":
+    print("Please upload a PDF file containing the building floorplan.")
+    upload_file()
+
